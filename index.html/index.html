@@ -1,0 +1,1732 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <!-- 移动端视口设置，禁止用户手动缩放，确保全屏体验 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
+    <title>散光迷宫 ｜ Astigmatism Maze</title>
+    <!-- 引入谷歌像素风字体 -->
+    <link href="https://fonts.googleapis.com/css2?family=Zpix&family=Press+Start+2P&display=swap" rel="stylesheet">
+    <!-- 引入 Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <style>
+        /* 引入像素风中文字体 fallback，利用现代CSS模拟像素艺术 */
+        @font-face {
+            font-family: 'PixelFont';
+            src: local('Zpix'), local('IPix'), local('SimSun'); /* 找不到专用像素字体时用宋体 fallback 模拟 */
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            margin: 0;
+            padding: 0;
+            outline: none;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #201E1F;
+            font-family: 'PixelFont', 'Press Start 2P', 'Courier New', Courier, monospace;
+            color: #E1FE52;
+        }
+
+        /* 游戏画布占满整个屏幕 */
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        /* 整体色相差特效滤镜 */
+        .chromatic-aberration {
+            animation: chromaticShift 4s infinite ease-in-out alternate;
+        }
+
+        @keyframes chromaticShift {
+            0% {
+                filter: drop-shadow(1px 0px 0px rgba(235, 100, 60, 0.4)) drop-shadow(-1px 0px 0px rgba(102, 91, 192, 0.4));
+            }
+            50% {
+                filter: drop-shadow(1.5px 0.5px 0px rgba(235, 100, 60, 0.5)) drop-shadow(-1.5px -0.5px 0px rgba(102, 91, 192, 0.5));
+            }
+            100% {
+                filter: drop-shadow(0.5px -1px 0px rgba(235, 100, 60, 0.3)) drop-shadow(-0.5px 1px 0px rgba(102, 91, 192, 0.3));
+            }
+        }
+
+        /* 文字故障(Glitch)特效 */
+        .glitch-text {
+            position: relative;
+            display: inline-block;
+            color: #E1FE52;
+            text-shadow: 2px 0 #EB643C, -2px 0 #665BC0;
+        }
+        
+        .glitch-text::before, .glitch-text::after {
+            content: attr(data-text);
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: transparent;
+        }
+
+        .glitch-text::before {
+            left: 2px;
+            text-shadow: -2px 0 #ff00c1;
+            clip: rect(44px, 450px, 56px, 0);
+            animation: glitch-anim 5s infinite linear alternate-reverse;
+        }
+
+        .glitch-text::after {
+            left: -2px;
+            text-shadow: -2px 0 #00fff9, 0 2px #ff00c1;
+            clip: rect(85px, 450px, 140px, 0);
+            animation: glitch-anim2 5s infinite linear alternate-reverse;
+        }
+
+        @keyframes glitch-anim {
+            0% { clip: rect(15px, 9999px, 66px, 0); }
+            10% { clip: rect(34px, 9999px, 55px, 0); }
+            20% { clip: rect(1px, 9999px, 115px, 0); }
+            30% { clip: rect(87px, 9999px, 5px, 0); }
+            40% { clip: rect(43px, 9999px, 90px, 0); }
+            50% { clip: rect(110px, 9999px, 34px, 0); }
+            60% { clip: rect(9px, 9999px, 120px, 0); }
+            70% { clip: rect(67px, 9999px, 10px, 0); }
+            80% { clip: rect(122px, 9999px, 85px, 0); }
+            90% { clip: rect(3px, 9999px, 140px, 0); }
+            100% { clip: rect(45px, 9999px, 70px, 0); }
+        }
+
+        @keyframes glitch-anim2 {
+            0% { clip: rect(80px, 9999px, 10px, 0); }
+            10% { clip: rect(12px, 9999px, 95px, 0); }
+            20% { clip: rect(60px, 9999px, 40px, 0); }
+            30% { clip: rect(110px, 9999px, 85px, 0); }
+            40% { clip: rect(4px, 9999px, 130px, 0); }
+            50% { clip: rect(90px, 9999px, 20px, 0); }
+            60% { clip: rect(35px, 9999px, 115px, 0); }
+            70% { clip: rect(120px, 9999px, 55px, 0); }
+            80% { clip: rect(5px, 9999px, 95px, 0); }
+            90% { clip: rect(44px, 9999px, 10px, 0); }
+            100% { clip: rect(99px, 9999px, 140px, 0); }
+        }
+
+        /* 顶部状态栏 */
+        #status-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 60px;
+            padding: 0 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 10;
+            background: linear-gradient(180deg, rgba(32,30,31,0.85) 0%, rgba(32,30,31,0) 100%);
+            pointer-events: none;
+        }
+
+        #status-title {
+            font-size: 14px;
+            font-weight: bold;
+            color: #E1FE52;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            text-shadow: 1px 1px 0px #665BC0;
+            pointer-events: auto;
+        }
+
+        #exit-btn {
+            background: transparent;
+            border: none;
+            color: #EB643C;
+            font-family: 'PixelFont', sans-serif;
+            font-size: 14px;
+            cursor: pointer;
+            padding: 10px 15px;
+            pointer-events: auto;
+            text-shadow: 1px 1px 0px #201E1F;
+            transition: transform 0.1s ease;
+        }
+
+        #exit-btn:active {
+            transform: scale(0.9);
+            color: #E1FE52;
+        }
+
+        /* 实时散光等级指示器 */
+        #astigmatism-indicator {
+            position: absolute;
+            top: 70px;
+            left: 20px;
+            z-index: 10;
+            background-color: rgba(32, 30, 31, 0.9);
+            border: 2px dashed #EB643C;
+            padding: 8px 12px;
+            font-size: 12px;
+            color: #E1FE52;
+            display: none; /* 游戏开始后显示 */
+            box-shadow: 4px 4px 0px #201E1F;
+        }
+
+        #astigmatism-bar-outer {
+            width: 150px;
+            height: 10px;
+            background-color: #201E1F;
+            border: 1px solid #E1FE52;
+            margin-top: 5px;
+            position: relative;
+        }
+
+        #astigmatism-bar-inner {
+            width: 0%;
+            height: 100%;
+            background-color: #EB643C;
+            transition: width 0.1s linear;
+        }
+
+        #astigmatism-stage-text {
+            color: #EB643C;
+            font-weight: bold;
+        }
+
+        /* 悬浮面板基础样式 - 像素风框 */
+        .pixel-panel {
+            background-color: rgba(32, 30, 31, 0.95);
+            border: 4px solid #665BC0;
+            box-shadow: 0px 0px 0px 4px #201E1F, 0px 0px 0px 8px #E1FE52, 0px 10px 0px 4px rgba(0,0,0,0.5);
+            padding: 25px;
+            text-align: center;
+        }
+
+        /* 像素风按钮 */
+        .pixel-btn {
+            background-color: #665BC0;
+            color: #E1FE52;
+            border: 4px solid #E1FE52;
+            padding: 12px 24px;
+            font-family: 'PixelFont', sans-serif;
+            font-size: 16px;
+            cursor: pointer;
+            box-shadow: 4px 4px 0px #201E1F;
+            transition: all 0.1s ease;
+            text-transform: uppercase;
+            position: relative;
+            margin: 10px 0;
+        }
+
+        .pixel-btn:active {
+            transform: translate(2px, 2px);
+            box-shadow: 2px 2px 0px #201E1F;
+            background-color: #EB643C;
+            color: #E1FE52;
+        }
+
+        /* 选项布局容器 */
+        .options-container {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        /* 初始/主界面 */
+        #menu-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #201E1F;
+            z-index: 20;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        #menu-logo-container {
+            margin-bottom: 50px;
+            text-align: center;
+        }
+
+        #menu-title {
+            font-size: clamp(24px, 5vw, 54px);
+            font-weight: 900;
+            color: #E1FE52;
+            letter-spacing: 2px;
+            line-height: 1.2;
+            margin-bottom: 10px;
+        }
+
+        #menu-subtitle {
+            font-size: 14px;
+            color: #665BC0;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+        }
+
+        /* 模态选择框 */
+        #dialog-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(32, 30, 31, 0.85);
+            z-index: 30;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        #dialog-box {
+            max-width: 500px;
+            width: 100%;
+        }
+
+        #dialog-text {
+            color: #E1FE52;
+            font-size: 16px;
+            line-height: 1.6;
+            margin-bottom: 20px;
+            text-shadow: 1px 1px 0px #665BC0;
+        }
+
+        /* 底部提示栏 */
+        #tips-bar {
+            position: absolute;
+            bottom: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+            background-color: rgba(32, 30, 31, 0.85);
+            border: 2px solid #665BC0;
+            padding: 8px 16px;
+            border-radius: 4px;
+            color: #E1FE52;
+            font-size: 11px;
+            text-align: center;
+            pointer-events: none;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+            display: none; /* 游戏开始后显示 */
+            max-width: 95%;
+        }
+
+        /* 右下角小地图容器 */
+        #minimap-container {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 110px;
+            height: 110px;
+            background-color: rgba(32, 30, 31, 0.7);
+            border: 3px solid #665BC0;
+            border-radius: 8px;
+            z-index: 10;
+            pointer-events: none;
+            display: none; /* 游戏开始后显示 */
+            overflow: hidden;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+
+        #minimap {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* 通关和游戏界面覆盖层 */
+        #win-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(32, 30, 31, 0.95);
+            z-index: 25;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        #win-title {
+            font-size: 32px;
+            color: #E1FE52;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 0px #EB643C;
+        }
+
+        #win-desc {
+            font-size: 14px;
+            color: #E1FE52;
+            margin-bottom: 30px;
+            text-align: center;
+            line-height: 1.8;
+            max-width: 400px;
+        }
+
+        /* PC端按键提示 */
+        #pc-controls {
+            margin-top: 15px;
+            font-size: 10px;
+            color: rgba(225, 254, 82, 0.5);
+            text-transform: uppercase;
+        }
+
+        /* 隐藏Canvas默认聚焦边框 */
+        canvas {
+            outline: none;
+        }
+
+        /* AI 视力专家互动面板样式 */
+        .ai-chat-bubble {
+            background-color: #201E1F;
+            border: 2px solid #665BC0;
+            border-radius: 4px;
+            padding: 8px;
+            margin-bottom: 8px;
+            font-size: 12px;
+            line-height: 1.5;
+            word-wrap: break-word;
+        }
+
+        .ai-bubble-sender {
+            color: #EB643C;
+            font-weight: bold;
+            margin-bottom: 3px;
+        }
+
+        .user-bubble-sender {
+            color: #E1FE52;
+            font-weight: bold;
+            margin-bottom: 3px;
+        }
+
+        #qa-chat-box::-webkit-scrollbar, #assess-report-box::-webkit-scrollbar {
+            width: 6px;
+        }
+        #qa-chat-box::-webkit-scrollbar-thumb, #assess-report-box::-webkit-scrollbar-thumb {
+            background: #665BC0;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body class="chromatic-aberration">
+
+    <!-- 顶部状态栏 -->
+    <div id="status-bar">
+        <div id="status-title" class="glitch-text" data-text="散光迷宫 ｜ ASTIGMATISM MAZE">散光迷宫 ｜ ASTIGMATISM MAZE</div>
+        <button id="exit-btn" class="glitch-text" data-text="退出 [ESC]">退出 [ESC]</button>
+    </div>
+
+    <!-- 散光等级指示器 -->
+    <div id="astigmatism-indicator">
+        <div>视疲劳度 (散光度): <span id="astigmatism-val">0</span>%</div>
+        <div>当前视觉阶段: <span id="astigmatism-stage-text">正常视力</span></div>
+        <div id="astigmatism-bar-outer">
+            <div id="astigmatism-bar-inner"></div>
+        </div>
+    </div>
+
+    <!-- AI 专家控制按钮 -->
+    <button id="ai-toggle-btn" class="pixel-btn glitch-text" style="position: absolute; top: 180px; left: 20px; z-index: 10; margin: 0; padding: 10px 16px; font-size: 11px; display: none; border-color: #E1FE52; background: rgba(102, 91, 192, 0.8);" data-text="AI 守护专家 [Q]">
+        AI 守护专家 [Q]
+    </button>
+
+    <!-- 3D渲染容器 -->
+    <div id="canvas-container"></div>
+
+    <!-- 主菜单初始界面 -->
+    <div id="menu-screen">
+        <div id="menu-logo-container">
+            <h1 id="menu-title" class="glitch-text" data-text="ASTIGMATISM MAZE">ASTIGMATISM MAZE</h1>
+            <p id="menu-subtitle">散光渐进模拟空间</p>
+        </div>
+        <button id="start-btn" class="pixel-btn glitch-text" data-text="开启体验">开启体验</button>
+        <div id="pc-controls">PC端支持: WASD/方向键移动、Q 键唤出AI专家、鼠标锁定转向</div>
+    </div>
+
+    <!-- 模态选择对话框（引入不可逆视觉模拟路口） -->
+    <div id="dialog-overlay">
+        <div id="dialog-box" class="pixel-panel">
+            <p id="dialog-text">“你想用什么样的视力来度过你的一生？”<br><br><span style="color: #EB643C;">【提示】散光道路会持续积累视觉损伤（最高点会留下永久后遗症，无法完全缓解）。</span></p>
+            <div class="options-container">
+                <button id="normal-path-btn" class="pixel-btn glitch-text" data-text="正常视力道路 (清晰但平凡)">正常视力道路 (清晰)</button>
+                <button id="astig-path-btn" class="pixel-btn glitch-text" style="border-color: #EB643C; color: #EB643C;" data-text="散光视觉道路 (重影与迷雾)">散光视觉道路 (重影)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI 视力专家控制面板 (AI Vision Guardian) -->
+    <div id="ai-panel-overlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(32, 30, 31, 0.85); z-index: 40; display: none; justify-content: center; align-items: center; padding: 20px;">
+        <div class="pixel-panel" style="max-width: 550px; width: 100%; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; padding: 15px; text-align: left;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px dashed #665BC0; padding-bottom: 10px; margin-bottom: 15px;">
+                <span class="glitch-text" style="font-size: 16px; font-weight: bold; color: #E1FE52;" data-text="AI 视力守护专家">AI 视力守护专家</span>
+                <button id="ai-panel-close-btn" class="pixel-btn" style="margin: 0; padding: 4px 8px; font-size: 12px; background: #EB643C; border-color: #201E1F; box-shadow: 2px 2px 0px #201E1F;">[X] 关闭</button>
+            </div>
+            
+            <!-- 标签选择器 -->
+            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                <button id="tab-assess-btn" class="pixel-btn" style="flex: 1; margin: 0; padding: 8px; font-size: 12px; background: #665BC0;">视力智能诊断</button>
+                <button id="tab-qa-btn" class="pixel-btn" style="flex: 1; margin: 0; padding: 8px; font-size: 12px; background: #201E1F;">守护者问答</button>
+            </div>
+
+            <!-- Tab 1: 视力智能诊断 -->
+            <div id="tab-assess-content" style="display: flex; flex-direction: column; flex: 1; overflow: hidden;">
+                <div style="background: rgba(102, 91, 192, 0.2); border: 2px solid #665BC0; padding: 10px; margin-bottom: 12px; font-size: 11px; line-6height: 1.6;">
+                    <div style="font-weight: bold; color: #E1FE52; margin-bottom: 5px; text-align: center;">🎮 实时冒险数据追踪 🎮</div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px;">
+                        <div>⏱️ 冒险时长: <span id="stat-time" style="color: #EB643C; font-weight: bold;">0</span> 秒</div>
+                        <div>🧱 墙壁撞击: <span id="stat-collisions" style="color: #EB643C; font-weight: bold;">0</span> 次</div>
+                        <div>👁️ 实时散光: <span id="stat-astig" style="color: #EB643C; font-weight: bold;">0</span>%</div>
+                        <div>📈 历史最高: <span id="stat-peak" style="color: #EB643C; font-weight: bold;">0</span>%</div>
+                    </div>
+                </div>
+                <button id="trigger-assess-btn" class="pixel-btn glitch-text" style="width: 100%; margin: 0 0 10px 0; background: #EB643C; padding: 10px; font-size: 13px;" data-text="生成 AI 视力诊断报告">
+                    生成 AI 视力诊断报告
+                </button>
+                <div id="assess-report-box" style="flex: 1; background: #201E1F; border: 2px solid #665BC0; padding: 10px; overflow-y: auto; font-size: 12px; color: #E1FE52; white-space: pre-wrap; line-height: 1.6; min-height: 150px;">
+                    点击上方按钮，AI守护者将结合你的冒险碰撞深度和眼疲劳数据，分析生成专业沉浸式的诊断报告...
+                </div>
+            </div>
+
+            <!-- Tab 2: 守护者问答 -->
+            <div id="tab-qa-content" style="display: none; flex-direction: column; flex: 1; overflow: hidden;">
+                <div id="qa-chat-box" style="flex: 1; background: #201E1F; border: 2px solid #665BC0; padding: 10px; overflow-y: auto; font-size: 12px; color: #E1FE52; margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px; min-height: 200px;">
+                    <div class="ai-chat-bubble">
+                        <div class="ai-bubble-sender">[AI 视力守护专家]</div>
+                        <div>你好！我是你的视力守护者。在寻找出口的同时，有任何关于现实中眼睛干涩、酸痛、防蓝光、保护视力或改善散光的问题，随时可以向我提问。</div>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <input type="text" id="qa-input" placeholder="输入关于眼睛干涩/防蓝光等现实疑问..." style="flex: 1; background: #201E1F; border: 2px solid #665BC0; color: #E1FE52; padding: 10px; font-family: 'PixelFont', monospace; font-size: 12px; border-radius: 0;" />
+                    <button id="qa-send-btn" class="pixel-btn" style="margin: 0; padding: 10px 15px; font-size: 12px; height: 38px;">发送</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 通关界面 -->
+    <div id="win-screen">
+        <div class="pixel-panel" style="max-width: 450px; width: 100%;">
+            <h2 id="win-title" class="glitch-text" data-text="逃离成功！">逃离成功！</h2>
+            <p id="win-desc">你已冲出迷雾。散光让世界扭曲、炫光、暗淡重影，但前方的路始终在你的脚下。爱护双眼，避免在黑暗中用眼。</p>
+            <button id="restart-btn" class="pixel-btn glitch-text" data-text="再试一次">再试一次</button>
+        </div>
+    </div>
+
+    <!-- 底部操作提示 -->
+    <div id="tips-bar">
+        <span>PC端：WASD移动、Q：AI守护专家 | 移动端：单指滑动看视角、双击前进、长按后退</span>
+    </div>
+
+    <!-- 右下角小地图 -->
+    <div id="minimap-container">
+        <canvas id="minimap"></canvas>
+    </div>
+
+    <script>
+        // --- 1. 核心状态变量 ---
+        const GAME_STATE = {
+            MENU: 'menu',
+            DIALOG: 'dialog',
+            PLAYING: 'playing',
+            WIN: 'win'
+        };
+        let currentStatus = GAME_STATE.MENU;
+
+        // 散光视觉系统核心变量
+        let astigmatismLevel = 0;          // 散光程度 (0 - 100)
+        let isAstigmatismActive = false;   // 散光系统是否激活
+        let peakAstigmatismLevel = 0;      // 记录曾达到的最高散光阈值（不可逆设计）
+        let isOnAstigmatismPath = false;   // 玩家当前是否处于散光道路上
+
+        // AI守护专家所需的游玩追踪指标
+        let playTimeSeconds = 0;           // 游玩秒数累计
+        let collisionCount = 0;            // 碰撞墙体次数累计
+        let lastCollisionRecordedTime = 0; // 防连击碰撞记录防抖
+        let isTyping = false;              // 打字状态锁定标示符
+
+        // 迷宫地图定义 (0: 空地, 1: 墙壁, 2: 起始点, 3: 终点出口)
+        const MAZE_GRID = [
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            [1, 2, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1],
+            [1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 0, 1],
+            [1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1],
+            [1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1],
+            [1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1],
+            [1, 0, 1, 0, 1, 1, 1, 1, 0, 1, 0, 1],
+            [1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1],
+            [1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1],
+            [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1],
+            [1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 3, 1],
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+        ];
+
+        const UNIT_SIZE = 4; // 迷宫每格物理大小 (4x4)
+        const WALL_HEIGHT = 4; // 墙体高度
+        const PLAYER_RADIUS = 0.6; // 碰撞检测半径
+        
+        // 玩家初始位置
+        let player = {
+            x: 1.5 * UNIT_SIZE,
+            z: 1.5 * UNIT_SIZE,
+            angleY: 0, // 水平旋转
+            angleX: 0, // 垂直旋转
+            height: 1.6 // 相机高度
+        };
+
+        // --- 2. 动态生成散光测试图纹理 ---
+        function createAstigmatismTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+
+            // 1. 填充黑色背景
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 2. 绘制散光线 (亮荧光绿)
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const outerRadius = 220;
+            const innerRadius = 55;
+            const totalLines = 60;
+
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = '#00ff00';
+
+            for (let i = 0; i < totalLines; i++) {
+                const angle = (i * 2 * Math.PI) / totalLines;
+                const cos = Math.cos(angle);
+                const sin = Math.sin(angle);
+
+                if (i % 5 === 0) {
+                    ctx.lineWidth = 6;
+                } else {
+                    ctx.lineWidth = 3;
+                }
+
+                ctx.beginPath();
+                const segments = 4;
+                for (let s = 0; s < segments; s++) {
+                    const rStart = innerRadius + s * 40;
+                    const rEnd = rStart + 25;
+                    ctx.moveTo(centerX + rStart * cos, centerY + rStart * sin);
+                    ctx.lineTo(centerX + rEnd * cos, centerY + rEnd * sin);
+                }
+                ctx.stroke();
+            }
+
+            // 3. 绘制时钟数字
+            ctx.fillStyle = '#00ff00';
+            ctx.font = 'bold 24px monospace';
+            ctx.textBaseline = 'middle';
+            ctx.textAlign = 'center';
+            for (let num = 1; num <= 12; num++) {
+                const angle = (num * 30 - 90) * Math.PI / 180;
+                const dist = outerRadius + 22;
+                const x = centerX + dist * Math.cos(angle);
+                const y = centerY + dist * Math.sin(angle);
+                ctx.fillText(num.toString(), x, y);
+            }
+
+            // 4. 绘制中心留空
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, innerRadius - 5, 0, 2 * Math.PI);
+            ctx.fillStyle = '#000000';
+            ctx.fill();
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            return texture;
+        }
+
+        // --- 3. Three.js 场景构建 + 自定义着色器后期处理 ---
+        let scene, camera, renderer;
+        let wallMaterial, floorMaterial, ceilingMaterial, goalMaterial;
+        let mazeWalls = [];
+        let goalMesh;
+
+        // 后期处理定制组件
+        let rtScene, rtCamera, rtTexture;
+        let finalQuadMaterial;
+
+        function initThree() {
+            const container = document.getElementById('canvas-container');
+            
+            // 主场景
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2('#201E1F', 0.08);
+
+            // 主相机
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
+            updateCameraTransform();
+
+            // 渲染器
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            container.appendChild(renderer.domElement);
+
+            // 1. 初始化离屏渲染目标用作散光滤镜
+            const width = window.innerWidth * renderer.getPixelRatio();
+            const height = window.innerHeight * renderer.getPixelRatio();
+            rtTexture = new THREE.WebGLRenderTarget(width, height, {
+                minFilter: THREE.LinearFilter,
+                magFilter: THREE.LinearFilter,
+                format: THREE.RGBAFormat
+            });
+
+            // 2. 建立一个简单的平面展示层，用来跑我们的后期散光 Shader
+            rtScene = new THREE.Scene();
+            rtCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
+            // 自定义像素着色器
+            const astigmatismShader = {
+                vertexShader: `
+                    varying vec2 vUv;
+                    void main() {
+                        vUv = uv;
+                        gl_Position = vec4(position, 1.0);
+                    }
+                `,
+                fragmentShader: `
+                    uniform sampler2D tDiffuse;
+                    uniform float uAstigmatismLevel; // 0.0 - 100.0
+                    varying vec2 vUv;
+
+                    void main() {
+                        vec2 uv = vUv;
+                        float level = uAstigmatismLevel;
+
+                        // 基础画面颜色采样
+                        vec4 baseColor = texture2D(tDiffuse, uv);
+
+                        // 阶段特效计算
+                        if (level > 0.0) {
+                            vec2 shiftDir = vec2(1.0, 0.4) * 0.0002;
+                            float intensity = level;
+
+                            // 节点一：多重边缘虚像重影
+                            vec4 ghost1 = texture2D(tDiffuse, uv + shiftDir * intensity * 0.4);
+                            vec4 ghost2 = texture2D(tDiffuse, uv - shiftDir * intensity * 0.4);
+                            vec4 ghost3 = texture2D(tDiffuse, uv + shiftDir * intensity * 0.8 * vec2(-1.0, 1.0));
+
+                            vec4 blurredColor = mix(baseColor, (ghost1 + ghost2 + ghost3) / 3.0, clamp(level / 60.0, 0.0, 0.75));
+
+                            // 节点二：发光发散射线眩光
+                            if (level >= 34.0) {
+                                vec4 rayGlow = vec4(0.0);
+                                float numSamples = 6.0;
+                                vec2 radialDir = uv - vec2(0.5, 0.5);
+                                float scaleFactor = intensity * 0.0003;
+                                for(float i = 1.0; i <= 6.0; i++) {
+                                    rayGlow += texture2D(tDiffuse, uv + radialDir * i * scaleFactor);
+                                }
+                                rayGlow /= numSamples;
+                                blurredColor = mix(blurredColor, blurredColor + rayGlow * 0.5, clamp((level - 33.0) / 33.0, 0.0, 0.6));
+                            }
+
+                            // 节点三：亮度降低、色彩饱和度下降
+                            if (level >= 67.0) {
+                                float progress = (level - 67.0) / 33.0;
+                                
+                                blurredColor.rgb *= (1.0 - progress * 0.6);
+
+                                float gray = dot(blurredColor.rgb, vec3(0.299, 0.587, 0.114));
+                                blurredColor.rgb = mix(blurredColor.rgb, vec3(gray), progress * 0.95);
+                            }
+
+                            // 终极点：黑白微弱极暗感
+                            if (level >= 100.0) {
+                                float gray = dot(blurredColor.rgb, vec3(0.299, 0.587, 0.114));
+                                blurredColor.rgb = vec3(gray * 0.08); 
+                            }
+
+                            gl_FragColor = blurredColor;
+                        } else {
+                            gl_FragColor = baseColor;
+                        }
+                    }
+                `
+            };
+
+            finalQuadMaterial = new THREE.ShaderMaterial({
+                uniforms: {
+                    tDiffuse: { value: null },
+                    uAstigmatismLevel: { value: 0.0 }
+                },
+                vertexShader: astigmatismShader.vertexShader,
+                fragmentShader: astigmatismShader.fragmentShader,
+                depthWrite: false,
+                depthTest: false
+            });
+
+            const finalQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), finalQuadMaterial);
+            rtScene.add(finalQuad);
+
+            // 光照
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight('#E1FE52', 0.8);
+            dirLight.position.set(5, 10, 7);
+            scene.add(dirLight);
+
+            // 点光源跟随
+            const flashlight = new THREE.PointLight('#00ff00', 1.2, 10);
+            flashlight.name = "flashlight";
+            scene.add(flashlight);
+
+            // 材质构建
+            const astigmatismTex = createAstigmatismTexture();
+            
+            wallMaterial = new THREE.MeshBasicMaterial({ 
+                map: astigmatismTex, 
+                side: THREE.DoubleSide 
+            });
+            ceilingMaterial = new THREE.MeshBasicMaterial({ 
+                map: astigmatismTex,
+                side: THREE.DoubleSide
+            });
+            floorMaterial = new THREE.MeshBasicMaterial({ 
+                color: 0x050505 
+            });
+            goalMaterial = new THREE.MeshBasicMaterial({
+                color: 0xEB643C,
+                transparent: true,
+                opacity: 0.8
+            });
+
+            buildMaze3D();
+
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function buildMaze3D() {
+            mazeWalls.forEach(w => scene.remove(w));
+            mazeWalls = [];
+
+            const wallGeo = new THREE.BoxGeometry(UNIT_SIZE, WALL_HEIGHT, UNIT_SIZE);
+            const floorGeo = new THREE.PlaneGeometry(UNIT_SIZE * MAZE_GRID[0].length, UNIT_SIZE * MAZE_GRID.length);
+            const ceilingGeo = new THREE.PlaneGeometry(UNIT_SIZE * MAZE_GRID[0].length, UNIT_SIZE * MAZE_GRID.length);
+
+            const floorMesh = new THREE.Mesh(floorGeo, floorMaterial);
+            floorMesh.rotation.x = -Math.PI / 2;
+            floorMesh.position.set((MAZE_GRID[0].length * UNIT_SIZE) / 2, 0, (MAZE_GRID.length * UNIT_SIZE) / 2);
+            scene.add(floorMesh);
+
+            const ceilingMesh = new THREE.Mesh(ceilingGeo, ceilingMaterial);
+            ceilingMesh.rotation.x = Math.PI / 2;
+            ceilingMesh.position.set((MAZE_GRID[0].length * UNIT_SIZE) / 2, WALL_HEIGHT, (MAZE_GRID.length * UNIT_SIZE) / 2);
+            scene.add(ceilingMesh);
+
+            for (let r = 0; r < MAZE_GRID.length; r++) {
+                for (let c = 0; c < MAZE_GRID[r].length; c++) {
+                    const cell = MAZE_GRID[r][c];
+                    const posX = c * UNIT_SIZE + UNIT_SIZE / 2;
+                    const posZ = r * UNIT_SIZE + UNIT_SIZE / 2;
+
+                    if (cell === 1) {
+                        const wall = new THREE.Mesh(wallGeo, wallMaterial);
+                        wall.position.set(posX, WALL_HEIGHT / 2, posZ);
+                        scene.add(wall);
+                        
+                        mazeWalls.push({
+                            minX: posX - UNIT_SIZE / 2,
+                            maxX: posX + UNIT_SIZE / 2,
+                            minZ: posZ - UNIT_SIZE / 2,
+                            maxZ: posZ + UNIT_SIZE / 2
+                        });
+                    } else if (cell === 3) {
+                        const goalGeo = new THREE.CylinderGeometry(UNIT_SIZE/3, UNIT_SIZE/3, WALL_HEIGHT, 16);
+                        goalMesh = new THREE.Mesh(goalGeo, goalMaterial);
+                        goalMesh.position.set(posX, WALL_HEIGHT / 2, posZ);
+                        scene.add(goalMesh);
+                    } else if (cell === 2) {
+                        player.x = posX;
+                        player.z = posZ;
+                    }
+                }
+            }
+            updateCameraTransform();
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+
+            const width = window.innerWidth * renderer.getPixelRatio();
+            const height = window.innerHeight * renderer.getPixelRatio();
+            rtTexture.setSize(width, height);
+        }
+
+        // --- 4. 碰撞检测逻辑 ---
+        function checkCollision(newX, newZ) {
+            for (let i = 0; i < mazeWalls.length; i++) {
+                const wall = mazeWalls[i];
+                if (newX + PLAYER_RADIUS > wall.minX && newX - PLAYER_RADIUS < wall.maxX &&
+                    newZ + PLAYER_RADIUS > wall.minZ && newZ - PLAYER_RADIUS < wall.maxZ) {
+                    
+                    const now = Date.now();
+                    if (now - lastCollisionRecordedTime > 800) {
+                        collisionCount++;
+                        lastCollisionRecordedTime = now;
+                        updateStatsUI();
+                    }
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function movePlayer(distance) {
+            if (isTyping) return false;
+
+            const dx = -Math.sin(player.angleY) * distance;
+            const dz = -Math.cos(player.angleY) * distance;
+
+            const nextX = player.x + dx;
+            const nextZ = player.z + dz;
+
+            let moved = false;
+            if (!checkCollision(nextX, player.z)) {
+                player.x = nextX;
+                moved = true;
+            }
+            if (!checkCollision(player.x, nextZ)) {
+                player.z = nextZ;
+                moved = true;
+            }
+
+            checkWinCondition();
+            return moved;
+        }
+
+        function checkWinCondition() {
+            for (let r = 0; r < MAZE_GRID.length; r++) {
+                for (let c = 0; c < MAZE_GRID[r].length; c++) {
+                    if (MAZE_GRID[r][c] === 3) {
+                        const targetX = c * UNIT_SIZE + UNIT_SIZE / 2;
+                        const targetZ = r * UNIT_SIZE + UNIT_SIZE / 2;
+                        const dist = Math.hypot(player.x - targetX, player.z - targetZ);
+                        if (dist < 1.5) {
+                            triggerWin();
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- 5. 核心手势与交互处理器 ---
+        let isPointerLocked = false;
+        let touchStartPos = { x: 0, y: 0, time: 0 };
+        let lastTouchEndPos = { x: 0, y: 0, time: 0 };
+        let isMovingOrSwiping = false;
+        let longPressTimer = null;
+        let isLongPressing = false;
+
+        function setupControls() {
+            const container = renderer.domElement;
+
+            document.addEventListener('keydown', handleKeyDown);
+            container.addEventListener('click', () => {
+                if (isTyping || currentStatus !== GAME_STATE.PLAYING || isAIPanelOpen()) return;
+                if (!isPointerLocked) {
+                    if (typeof container.requestPointerLock === 'function') {
+                        container.requestPointerLock();
+                    }
+                }
+            });
+
+            document.addEventListener('pointerlockchange', () => {
+                isPointerLocked = (document.pointerLockElement === container);
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (isTyping) return;
+                if (isPointerLocked && currentStatus === GAME_STATE.PLAYING) {
+                    const sensitivity = 0.0025;
+                    player.angleY -= e.movementX * sensitivity;
+                    player.angleX -= e.movementY * sensitivity;
+                    limitPitch();
+                    updateCameraTransform();
+                }
+            });
+
+            container.addEventListener('touchstart', onTouchStart, { passive: false });
+            container.addEventListener('touchmove', onTouchMove, { passive: false });
+            container.addEventListener('touchend', onTouchEnd, { passive: false });
+            container.addEventListener('touchcancel', onTouchCancel, { passive: false });
+        }
+
+        function onTouchStart(e) {
+            if (isTyping || currentStatus !== GAME_STATE.PLAYING) return;
+            e.preventDefault();
+
+            if (e.touches.length === 1) {
+                const touch = e.touches[0];
+                touchStartPos.x = touch.clientX;
+                touchStartPos.y = touch.clientY;
+                touchStartPos.time = Date.now();
+                
+                isMovingOrSwiping = false;
+                isLongPressing = false;
+
+                clearTimeout(longPressTimer);
+                longPressTimer = setTimeout(() => {
+                    if (!isMovingOrSwiping) {
+                        isLongPressing = true;
+                    }
+                }, 600);
+            }
+        }
+
+        function onTouchMove(e) {
+            if (isTyping || currentStatus !== GAME_STATE.PLAYING) return;
+            e.preventDefault();
+
+            if (e.touches.length === 1) {
+                const touch = e.touches[0];
+                const deltaX = touch.clientX - touchStartPos.x;
+                const deltaY = touch.clientY - touchStartPos.y;
+
+                if (Math.hypot(deltaX, deltaY) > 10) {
+                    isMovingOrSwiping = true;
+                    clearTimeout(longPressTimer);
+                    isLongPressing = false;
+                }
+
+                const rotateSensitivity = 0.005;
+                player.angleY -= deltaX * rotateSensitivity;
+                player.angleX -= deltaY * rotateSensitivity;
+                limitPitch();
+                updateCameraTransform();
+
+                touchStartPos.x = touch.clientX;
+                touchStartPos.y = touch.clientY;
+            }
+        }
+
+        function onTouchEnd(e) {
+            if (isTyping || currentStatus !== GAME_STATE.PLAYING) return;
+            e.preventDefault();
+
+            clearTimeout(longPressTimer);
+            
+            const now = Date.now();
+            const touch = e.changedTouches[0];
+            const endX = touch.clientX;
+            const endY = touch.clientY;
+
+            if (isLongPressing) {
+                isLongPressing = false;
+                return;
+            }
+
+            if (!isMovingOrSwiping) {
+                const timeDiff = now - lastTouchEndPos.time;
+                const distDiff = Math.hypot(endX - lastTouchEndPos.x, endY - lastTouchEndPos.y);
+
+                if (timeDiff < 500 && distDiff < 30) {
+                    movePlayer(1.6);
+                    updateCameraTransform();
+                    lastTouchEndPos.time = 0; 
+                    return;
+                }
+
+                lastTouchEndPos.x = endX;
+                lastTouchEndPos.y = endY;
+                lastTouchEndPos.time = now;
+            }
+        }
+
+        function onTouchCancel(e) {
+            clearTimeout(longPressTimer);
+            isLongPressing = false;
+            isMovingOrSwiping = false;
+        }
+
+        function limitPitch() {
+            const limit = 80 * Math.PI / 180;
+            if (player.angleX > limit) player.angleX = limit;
+            if (player.angleX < -limit) player.angleX = -limit;
+        }
+
+        function updateCameraTransform() {
+            if (!camera) return;
+            camera.position.set(player.x, player.height, player.z);
+
+            const target = new THREE.Vector3();
+            target.x = player.x - Math.sin(player.angleY) * Math.cos(player.angleX);
+            target.y = player.height + Math.sin(player.angleX);
+            target.z = player.z - Math.cos(player.angleY) * Math.cos(player.angleX);
+
+            camera.lookAt(target);
+
+            const flashlight = scene.getObjectByName("flashlight");
+            if (flashlight) {
+                flashlight.position.copy(camera.position);
+            }
+        }
+
+        const keys = {};
+        function handleKeyDown(e) {
+            if (isTyping) return;
+            
+            // 安全退出机制：如果AI控制面板显示，先关闭控制面板
+            if (isAIPanelOpen() && (e.key === 'Escape' || e.keyCode === 27)) {
+                document.getElementById('ai-panel-overlay').style.display = 'none';
+                isTyping = false;
+                e.preventDefault();
+                return;
+            }
+
+            if (currentStatus !== GAME_STATE.PLAYING) return;
+
+            if (e.key === 'Escape' || e.keyCode === 27) {
+                exitToMenu();
+            }
+
+            // PC端按下 Q 键直接打开 AI 面板
+            if (e.key === 'q' || e.key === 'Q' || e.keyCode === 81) {
+                openAIPanel();
+            }
+        }
+
+        window.addEventListener('keydown', (e) => { if (!isTyping) keys[e.key.toLowerCase()] = true; });
+        window.addEventListener('keyup', (e) => { if (!isTyping) keys[e.key.toLowerCase()] = false; });
+
+        function updatePCMovement(deltaTime) {
+            if (currentStatus !== GAME_STATE.PLAYING || isTyping) return;
+
+            const speed = 4.0 * deltaTime;
+            let moveX = 0;
+            let moveZ = 0;
+
+            if (keys['w'] || keys['arrowup']) {
+                moveX += -Math.sin(player.angleY);
+                moveZ += -Math.cos(player.angleY);
+            }
+            if (keys['s'] || keys['arrowdown']) {
+                moveZ += Math.cos(player.angleY);
+                moveX += Math.sin(player.angleY);
+            }
+            if (keys['a'] || keys['arrowleft']) {
+                moveX += -Math.cos(player.angleY);
+                moveZ += Math.sin(player.angleY);
+            }
+            if (keys['d'] || keys['arrowright']) {
+                moveX += Math.cos(player.angleY);
+                moveZ += -Math.sin(player.angleY);
+            }
+
+            if (moveX !== 0 || moveZ !== 0) {
+                const length = Math.hypot(moveX, moveZ);
+                const nextX = player.x + (moveX / length) * speed;
+                const nextZ = player.z + (moveZ / length) * speed;
+
+                if (!checkCollision(nextX, player.z)) {
+                    player.x = nextX;
+                }
+                if (!checkCollision(player.x, nextZ)) {
+                    player.z = nextZ;
+                }
+                updateCameraTransform();
+                checkWinCondition();
+            }
+        }
+
+        // --- 6. 散光逻辑演化更新 (每秒更新) ---
+        let lastAstigTime = 0;
+        function updateAstigmatismSystem(currentTime) {
+            if (currentStatus !== GAME_STATE.PLAYING) return;
+
+            // 每隔 1 秒更新一次
+            if (currentTime - lastAstigTime >= 1000) {
+                lastAstigTime = currentTime;
+
+                playTimeSeconds++;
+                updateStatsUI();
+
+                if (isAstigmatismActive) {
+                    if (isOnAstigmatismPath) {
+                        astigmatismLevel = Math.min(100, astigmatismLevel + 2);
+                    } else {
+                        astigmatismLevel = Math.max(0, astigmatismLevel - 1);
+                    }
+
+                    if (astigmatismLevel < peakAstigmatismLevel) {
+                        astigmatismLevel = peakAstigmatismLevel;
+                    }
+
+                    if (astigmatismLevel >= 67) {
+                        peakAstigmatismLevel = 67;
+                    } else if (astigmatismLevel >= 34) {
+                        peakAstigmatismLevel = Math.max(peakAstigmatismLevel, 34);
+                    }
+                }
+
+                updateAstigmatismUI();
+            }
+        }
+
+        function updateAstigmatismUI() {
+            document.getElementById('astigmatism-val').textContent = Math.floor(astigmatismLevel);
+            const bar = document.getElementById('astigmatism-bar-inner');
+            bar.style.width = astigmatismLevel + '%';
+
+            const textEl = document.getElementById('astigmatism-stage-text');
+            if (astigmatismLevel === 0) {
+                textEl.textContent = "正常视力";
+                textEl.style.color = "#E1FE52";
+            } else if (astigmatismLevel >= 1 && astigmatismLevel <= 33) {
+                textEl.textContent = "节点一：轻度重影";
+                textEl.style.color = "#E1FE52";
+            } else if (astigmatismLevel >= 34 && astigmatismLevel <= 66) {
+                textEl.textContent = "节点二：中度重影 + 眩光散发";
+                textEl.style.color = "#ffaa00";
+            } else if (astigmatismLevel >= 67 && astigmatismLevel <= 99) {
+                textEl.textContent = "节点三：重度重影 + 色彩衰减 + 昏暗";
+                textEl.style.color = "#EB643C";
+            } else {
+                textEl.textContent = "终极状态：微光夜盲 (全黑白)";
+                textEl.style.color = "#ff0055";
+            }
+        }
+
+        function updateStatsUI() {
+            document.getElementById('stat-time').textContent = playTimeSeconds;
+            document.getElementById('stat-collisions').textContent = collisionCount;
+            document.getElementById('stat-astig').textContent = Math.floor(astigmatismLevel);
+            document.getElementById('stat-peak').textContent = Math.floor(peakAstigmatismLevel);
+        }
+
+        // --- 7. 右下角半透明小地图绘制 ---
+        const minimapCanvas = document.getElementById('minimap');
+        const minimapCtx = minimapCanvas.getContext('2d');
+
+        function drawMinimap() {
+            if (currentStatus !== GAME_STATE.PLAYING) return;
+            
+            const cellCountY = MAZE_GRID.length;
+            const cellCountX = MAZE_GRID[0].length;
+            
+            if (minimapCanvas.width !== minimapCanvas.clientWidth) {
+                minimapCanvas.width = minimapCanvas.clientWidth;
+                minimapCanvas.height = minimapCanvas.clientHeight;
+            }
+
+            const w = minimapCanvas.width;
+            const h = minimapCanvas.height;
+            const cellSize = Math.min(w / cellCountX, h / cellCountY);
+            const offsetX = (w - cellSize * cellCountX) / 2;
+            const offsetY = (h - cellSize * cellCountY) / 2;
+
+            minimapCtx.clearRect(0, 0, w, h);
+
+            for (let r = 0; r < cellCountY; r++) {
+                for (let c = 0; c < cellCountX; c++) {
+                    const cell = MAZE_GRID[r][c];
+                    const x = offsetX + c * cellSize;
+                    const y = offsetY + r * cellSize;
+
+                    if (cell === 1) {
+                        minimapCtx.fillStyle = '#665BC0';
+                        minimapCtx.fillRect(x, y, cellSize - 1, cellSize - 1);
+                    } else if (cell === 3) {
+                        minimapCtx.fillStyle = '#EB643C';
+                        minimapCtx.fillRect(x, y, cellSize - 1, cellSize - 1);
+                    } else {
+                        minimapCtx.fillStyle = 'rgba(32, 30, 31, 0.5)';
+                        minimapCtx.fillRect(x, y, cellSize - 1, cellSize - 1);
+                    }
+                }
+            }
+
+            const pMapX = offsetX + (player.x / (cellCountX * UNIT_SIZE)) * (cellCountX * cellSize);
+            const pMapZ = offsetY + (player.z / (cellCountY * UNIT_SIZE)) * (cellCountY * cellSize);
+
+            minimapCtx.save();
+            minimapCtx.translate(pMapX, pMapZ);
+            minimapCtx.rotate(-player.angleY);
+
+            minimapCtx.fillStyle = 'rgba(225, 254, 82, 0.3)';
+            minimapCtx.beginPath();
+            minimapCtx.moveTo(0, 0);
+            minimapCtx.arc(0, 0, cellSize * 1.5, -Math.PI/2 - 0.4, -Math.PI/2 + 0.4);
+            minimapCtx.closePath();
+            minimapCtx.fill();
+
+            minimapCtx.fillStyle = '#E1FE52';
+            minimapCtx.beginPath();
+            minimapCtx.arc(0, 0, 4, 0, Math.PI * 2);
+            minimapCtx.fill();
+
+            minimapCtx.restore();
+        }
+
+        // --- 8. 游戏核心主循环 (Game Loop) ---
+        let lastTime = 0;
+
+        function animate(timestamp) {
+            requestAnimationFrame(animate);
+
+            if (!lastTime) lastTime = timestamp;
+            const deltaTime = Math.min((timestamp - lastTime) / 1000, 0.1);
+            lastTime = timestamp;
+
+            updateAstigmatismSystem(timestamp);
+
+            if (currentStatus === GAME_STATE.PLAYING && isLongPressing && !isTyping) {
+                movePlayer(-1.5 * deltaTime);
+                updateCameraTransform();
+            }
+
+            if (currentStatus === GAME_STATE.PLAYING && !isTyping) {
+                updatePCMovement(deltaTime);
+                
+                if (goalMesh) {
+                    goalMesh.rotation.y += 0.02;
+                    goalMesh.position.y = (WALL_HEIGHT / 2) + Math.sin(timestamp * 0.003) * 0.15;
+                }
+            }
+
+            if (renderer && scene && camera) {
+                renderer.setRenderTarget(rtTexture);
+                renderer.render(scene, camera);
+                renderer.setRenderTarget(null);
+
+                if (finalQuadMaterial) {
+                    finalQuadMaterial.uniforms.tDiffuse.value = rtTexture.texture;
+                    finalQuadMaterial.uniforms.uAstigmatismLevel.value = astigmatismLevel;
+                }
+
+                renderer.render(rtScene, rtCamera);
+            }
+
+            drawMinimap();
+        }
+
+        // --- 9. Gemini AI 交互控制中心 ---
+        const apiKey = ""; // 运行时由宿主环境安全填充
+
+        function openAIPanel() {
+            if (typeof document.exitPointerLock === 'function') {
+                document.exitPointerLock();
+            }
+            const aiPanelOverlay = document.getElementById('ai-panel-overlay');
+            if (aiPanelOverlay) {
+                aiPanelOverlay.style.display = 'flex';
+            }
+            updateStatsUI();
+        }
+
+        // 专业指数指数级退避算法发送
+        async function callGemini(userQuery, systemPrompt) {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+            const payload = {
+                contents: [{ parts: [{ text: userQuery }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] }
+            };
+
+            let delay = 1000;
+            for (let i = 0; i < 5; i++) {
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (response.ok) {
+                        const result = await response.json();
+                        return result.candidates?.[0]?.content?.parts?.[0]?.text || "守护者思绪断线了，请稍候重试。";
+                    }
+                } catch (e) {
+                    // 默默重试而不干扰用户
+                }
+                await new Promise(resolve => setTimeout(resolve, delay));
+                delay *= 2;
+            }
+            throw new Error("Gemini AI API 连接超时。");
+        }
+
+        // 本地应急智能分类眼科诊疗系统 (防止网络断连，给用户无缝的高水准医学级体验)
+        function getSmartLocalResponse(question) {
+            const q = question.toLowerCase();
+            let content = "";
+            
+            if (q.includes("干") || q.includes("涩") || q.includes("药水") || q.includes("眼泪") || q.includes("不舒服")) {
+                content = `💧 【干涩与泪膜崩溃危机应对预案】\n\n` +
+                          `🎯 立即行动方案：\n` +
+                          `1. **强制眨眼操**：闭眼3秒，睁眼3秒，重复10次。这能有效压迫副泪腺分泌脂质，重塑锁水泪膜。\n` +
+                          `2. **物理加湿**：在显示器旁放一个温水杯，提高眼周微环境湿度，减缓角膜表面水分蒸发。\n` +
+                          `3. **热敷救急**：用40℃左右的干净热毛巾或蒸汽眼罩温和热敷双眼10-15分钟。\n\n` +
+                          `🧬 深度防护科普：\n` +
+                          `当我们长时间盯着高亮度的电子屏幕时，人类的瞬目（眨眼）频率会从每分钟15-20次暴跌至4-6次。这会导致角膜表面的保护性泪膜因来不及补充而过快破裂，暴露眼球神经，从而引发刺痛、干燥和代偿性流泪。\n\n` +
+                          `💡 专家特别警告：\n` +
+                          `市面上许多主打“一滴去红血丝”的眼药水通常含有肾上腺素能受体激动剂（如萘甲唑啉），频繁使用会导致眼部血管产生依赖性收缩，一旦停用红血丝更严重，且加重干涩。请优先选择**不含防腐剂的单支装人工泪液**。`;
+            } else if (q.includes("酸") || q.includes("痛") || q.includes("累") || q.includes("疲劳") || q.includes("胀") || q.includes("晕")) {
+                content = `🔋 【眼肌过度拉伸与视疲劳康复协议】\n\n` +
+                          `🎯 立即行动方案：\n` +
+                          `1. **20-20-20 黄金法则**：每盯着迷宫或屏幕20分钟，将视线移向20英尺（约6米）外的远方，持续注视至少20秒。这是眼肌放松最科学的手段。\n` +
+                          `2. **掌温遮光法 (Palming)**：双手用力摩擦至发热，闭上双眼，将手掌呈杯状微扣在双眼上（不压迫眼球），享受2分钟黑暗温热，让睫状肌彻底松弛。\n\n` +
+                          `🧬 深度防护科普：\n` +
+                          `看近处物体时，眼球内部的睫状肌必须持续保持收缩状态，使晶状体变凸以增强聚焦能力。如果长时间得不到间歇放松，睫状肌会产生类似手臂酸胀的肌肉痉挛，引起眼眶酸痛、胀痛，甚至导致对焦缓慢、视物重影。\n\n` +
+                          `💡 人机工效学建议：\n` +
+                          `将屏幕顶部置于眼睛水平视线下约10-15度，屏幕中心距离眼睛保持50-70厘米，保证双眼处于略微向下的自然视线，能有效减少眼外肌张力，显著推迟视疲劳。`;
+            } else if (q.includes("蓝") || q.includes("蓝光") || q.includes("辐射") || q.includes("过滤")) {
+                content = `🛡️ 【电子有害蓝光与睡眠节律防护指南】\n\n` +
+                          `🎯 立即行动方案：\n` +
+                          `1. **开启暖色滤镜**：直接调出手机、平板或显示器系统自带的“护眼模式”或“夜间暖色”，过滤415-455nm的高能有害短波蓝光。\n` +
+                          `2. **两小时睡眠禁区**：睡前2小时避免长时间刷电子屏幕，给大脑褪黑素分泌腾出足够的窗口期。\n\n` +
+                          `🧬 深度防护科普：\n` +
+                          `可见光中波长最短、能量最高的蓝紫光会直达视网膜黄斑部。更关键的是，夜间的强蓝光射入瞳孔，会强烈抑制大脑内**褪黑素（Melatonin）**的自然释放。这会欺骗你的生物钟以为仍处于烈日当空，导致深睡比例降低、入睡困难与质量退化。\n\n` +
+                          `💡 护眼贴士：\n` +
+                          `阻隔率太高的黄褐色滤镜容易导致视物偏色，日常生活中选择30%左右轻度防蓝光的配置或直接调成轻度 system黄光足矣，切忌盲目依赖高色阻眼镜。`;
+            } else if (q.includes("黑") || q.includes("暗") || q.includes("夜") || q.includes("灯") || q.includes("被窝") || q.includes("晚上")) {
+                content = `⚠️ 【高危暗环境玩手机——高眼压与盲区警示】\n\n` +
+                          `🎯 立即行动方案：\n` +
+                          `1. **开启背景补偿光源**：切勿在全黑环境中玩手机！请务必在床头或房间开启一盏低功率的暖色氛围灯或背景偏置光源（Bias Lighting）。\n` +
+                          `2. **调低屏幕绝对亮度**：在极暗环境必须手动将屏幕亮度降到最低舒适值，避免强光垂直轰击瞳孔。\n\n` +
+                          `🧬 深度防护科普：\n` +
+                          `在黑暗中，你的双眼为了看清周围，瞳孔会因暗环境被迫极度放大；但同时，手中的高亮手机屏幕又在强刺激眼底视网膜。这两股矛盾的指令会让眼内循环的组织液（房水）排放通道受阻，导致眼压急性飙升，严重者可能诱发急性闭角型**青光眼（Glaucoma）**甚至造成永久视力损伤！\n\n` +
+                          `💡 警告建议：\n` +
+                          `暗室看屏幕不仅会急性升高眼压，更会导致黄斑区受高强度对比光源慢性光损伤。如果实在需要夜间用眼，请时刻保持背景亮度和手机亮度差不超过 3:1。`;
+            } else if (q.includes("散光") || q.includes("重影") || q.includes("炫光") || q.includes("重合") || q.includes("路灯")) {
+                content = `🪐 【角膜表面不规则曲率与散光应对协议】\n\n` +
+                          `🎯 立即行动方案：\n` +
+                          `1. **纠正躺卧玩手机习惯**：严禁斜着眼睛看东西，千万不要侧躺着刷手机或在晃动的交通工具上阅读！侧卧的压迫及不良视角会使眼外肌产生不均匀张力，诱发或加深散光度数。\n` +
+                          `2. **进行医学验光纠正**：散光属于角膜形态引起的物理缺陷，无法通过眼保健操等外部按摩消除，一旦影响视觉请立刻通过配镜或手术介入矫正。\n\n` +
+                          `🧬 深度防护科普：\n` +
+                          `正常角膜表面是一个浑圆的“足球面”，能将各个方向射入的光线完美汇聚到视网膜的一点上。而散光患者的角膜表面像一个不规则的“橄榄球”，导致不同方向的光线折射不均，无法在眼底形成单焦点，而会呈现多焦线，形成边缘毛糙、夜间看路灯严重拖尾散射、看物多重重影的折磨性视野。\n\n` +
+                          `💡 专家建议：\n` +
+                          `有散光却强撑不矫正，眼睛在对焦时不得不调动睫状肌以极限功率进行代偿调节，反而会使眼内肌极速疲劳，引发度数和眼部酸胀的恶性循环。`;
+            } else {
+                content = `🩹 【AI 视力守护专家全能健康守护建议】\n\n` +
+                          `🎯 立即行动方案：\n` +
+                          `1. **瞬目闭眼仪式**：闭上眼球默数 10 秒，期间眼球轻轻顺时针转动 5 圈，逆时针转动 5 圈，深呼吸，放松紧绷的神经。\n` +
+                          `2. **屏幕对比度均衡**：确保您玩游戏时的屏幕亮度和周围物理环境光比例处于温和区间（在1.5:1到3:1之间），切勿冷光刺眼。\n\n` +
+                          `🧬 深度防护科普：\n` +
+                          `眼睛是人体新陈代谢最活跃的微观器官之一。我们在像素世界里长途跋涉时，视网膜黄斑区的感光递质（如视紫红质）正被高强度的光电像素以惊人的速度消耗。如果没有足够的间歇让眼睛完成感光色素的自我再合成，眼睛就会出现对色彩钝化、对灰度敏感度下降的情况。\n\n` +
+                          `💡 守护寄语：\n` +
+                          `迷宫的墙壁虽然充满了模拟散光的干扰纹路，但那只是虚拟的冒险；现实中的双眼才是您感知大千世界最宝贵的视窗。请遵循每用眼 45 分钟休息 5 分钟的永恒法则，爱护您的双眼！`;
+            }
+            
+            return content;
+        }
+
+        // 视力守护专家模块初始化与锁定
+        function initAIGuardian() {
+            const aiToggleBtn = document.getElementById('ai-toggle-btn');
+            const aiPanelOverlay = document.getElementById('ai-panel-overlay');
+            const aiPanelCloseBtn = document.getElementById('ai-panel-close-btn');
+
+            const tabAssessBtn = document.getElementById('tab-assess-btn');
+            const tabQABtn = document.getElementById('tab-qa-btn');
+            const tabAssessContent = document.getElementById('tab-assess-content');
+            const tabQAContent = document.getElementById('tab-qa-content');
+
+            const triggerAssessBtn = document.getElementById('trigger-assess-btn');
+            const assessReportBox = document.getElementById('assess-report-box');
+
+            const qaInput = document.getElementById('qa-input');
+            const qaSendBtn = document.getElementById('qa-send-btn');
+            const qaChatBox = document.getElementById('qa-chat-box');
+
+            // 打开/关闭面板
+            aiToggleBtn.addEventListener('click', () => {
+                openAIPanel();
+            });
+
+            aiPanelCloseBtn.addEventListener('click', () => {
+                aiPanelOverlay.style.display = 'none';
+                isTyping = false;
+            });
+
+            // Tab 页面切换
+            tabAssessBtn.addEventListener('click', () => {
+                tabAssessContent.style.display = 'flex';
+                tabQAContent.style.display = 'none';
+                tabAssessBtn.style.backgroundColor = '#665BC0';
+                tabQABtn.style.backgroundColor = '#201E1F';
+            });
+
+            tabQABtn.addEventListener('click', () => {
+                tabAssessContent.style.display = 'none';
+                tabQAContent.style.display = 'flex';
+                tabAssessBtn.style.backgroundColor = '#201E1F';
+                tabQABtn.style.backgroundColor = '#665BC0';
+            });
+
+            // 输入安全防护锁定：打字时完全停止角色控制
+            const inputElements = [qaInput];
+            inputElements.forEach(elem => {
+                elem.addEventListener('focus', () => { isTyping = true; });
+                elem.addEventListener('blur', () => { isTyping = false; });
+            });
+
+            // Tab 1: AI 智能视力诊断报告生成
+            triggerAssessBtn.addEventListener('click', async () => {
+                triggerAssessBtn.disabled = true;
+                triggerAssessBtn.setAttribute('data-text', "评估分析中...");
+                triggerAssessBtn.innerText = "评估分析中...";
+                
+                // 炫酷的像素加载动效
+                assessReportBox.innerHTML = `🤖 [AI守护专家正在检索您的游玩行为数据]...\n⏱️ 检测已用时长... OK\n🧱 检测撞墙频率... OK\n🧬 散光系统数据... OK\n🪐 开始分析视敏度危害...\n\n[■■■■■■■■■■] 100% 解析完成\n\n数据提取中，请稍候。`;
+
+                const dataQuery = `
+                玩家当前数据：
+                - 冒险时长: ${playTimeSeconds} 秒
+                - 墙壁碰撞次数: ${collisionCount} 次
+                - 当前散光度数: ${astigmatismLevel}%
+                - 历史最高散光度数: ${peakAstigmatismLevel}%
+
+                请根据这些数据，生成一份具有游戏沉浸感和像素风格的定制化『眼疲劳及散光危害模拟评估报告』。指出当前玩法的损伤程度并提供温柔、切实的改善建议。
+                `;
+
+                const systemPrompt = `
+                你是一位在像素风迷宫里的温和、专业AI眼科视力守护专家（AI Vision Guardian）。
+                你需要分析玩家的冒险数据，并用生动像素风的方式，输出一份定制化、富有启发性的『眼部疲劳及散光危害模拟评估报告』。
+                请用温暖、关切、医学合理的口吻写一份排版清晰、带有像素emoji(如 👾, 👁️, ⚠️, 🩹, 💡)的诊断报告。不要长篇大论，注重段落感，突出散光的形成原因与防御常识。
+                `;
+
+                try {
+                    let result;
+                    if (apiKey && apiKey !== "") {
+                        result = await callGemini(dataQuery, systemPrompt);
+                    } else {
+                        // 应急诊断
+                        const localContent = getSmartLocalResponse(astigmatismLevel > 50 ? "疲劳" : "散光");
+                        result = `[云端 API 未连接，已启用本地AI行为诊疗自检模型]\n\n` +
+                                 `👾 行为病理自检发现：\n` +
+                                 `- 玩家累计冒险了 ${playTimeSeconds} 秒\n` +
+                                 `- 在充满散光偏斜图纹理的迷宫墙壁上发生了 ${collisionCount} 次深度撞击\n` +
+                                 `- 实时视觉疲劳度（模拟散光度数）攀升至 ${astigmatismLevel}%\n` +
+                                 `- 曾经达到的峰值损伤锁定值为 ${peakAstigmatismLevel}%\n\n` +
+                                 `📋 医生处方分析：\n` + localContent;
+                    }
+                    assessReportBox.innerText = result;
+                } catch (error) {
+                    assessReportBox.innerText = `❌ 生成评估报告失败，请检查网络，或确保环境加载正确。\n错误：${error.message}`;
+                } finally {
+                    triggerAssessBtn.disabled = false;
+                    triggerAssessBtn.setAttribute('data-text', "生成 AI 视力诊断报告");
+                    triggerAssessBtn.innerText = "生成 AI 视力诊断报告";
+                }
+            });
+
+            // Tab 2: 实时问答 (根据探索者的问题，智能地给予具体医疗及行动方案)
+            async function handleSendMessage() {
+                const question = qaInput.value.trim();
+                if (!question) return;
+
+                // 追加用户对话气泡
+                const userBubble = document.createElement('div');
+                userBubble.className = 'ai-chat-bubble';
+                userBubble.style.borderColor = '#E1FE52';
+                userBubble.innerHTML = `<div class="user-bubble-sender">[探索者]</div><div>${escapeHTML(question)}</div>`;
+                qaChatBox.appendChild(userBubble);
+                qaInput.value = "";
+                qaChatBox.scrollTop = qaChatBox.scrollHeight;
+
+                // 专家回复等待气泡
+                const loadingBubble = document.createElement('div');
+                loadingBubble.className = 'ai-chat-bubble';
+                loadingBubble.innerHTML = `<div class="ai-bubble-sender">[AI 视力守护专家]</div><div class="ai-loading">思考中 [■■■□□□]...</div>`;
+                qaChatBox.appendChild(loadingBubble);
+                qaChatBox.scrollTop = qaChatBox.scrollHeight;
+
+                const systemPrompt = `
+                你是一位身处『散光迷宫』游戏中的温和、专业、充满人文关怀的顶级AI眼科视力守护专家（AI Vision Guardian）。
+                当探索者向你咨询关于眼部健康（如眼睛干涩、酸痛、散光预防、防蓝光、黑暗玩手机危害、近视控制等）的疑问时，请遵循以下制造方案提供极其智能且实用的回复：
+
+                1. 【诊断与同理（15%）】：先用温柔关切的口吻分析他们当前的困境。如果结合了当前散光迷宫的重影、炫光环境更佳。
+                2. 【即时行动指南 (🎯 立即行动)（35%）】：提供2-3条马上可以执行的物理缓解方案（例如：20-20-20黄金法则、局部热敷手法、调节屏幕高度与环境亮度配比等）。
+                3. 【医学/防护科普 (🧬 深度防护)（35%）】：深入浅出地解释这个问题的医学原理（例如：为什么黑暗中看屏幕伤黄斑、蓝光对睡眠因子的抑制、散光为什么需要配戴散光镜片等）。
+                4. 【趣味守护结语（15%）】：像素风温暖鼓励，提醒他们保护好这扇通往世界像素色彩的窗户。
+
+                要求：
+                - 语言富有游戏沉浸感，排版分段清晰，善用标志性像素Emoji (👁️, 💧, ⏳, 🛡️, 💡, 🩹)。
+                - 绝对禁止无病呻吟的废话，直接给出最具可操作性的干货方案。
+                - 保持中文输出。
+                `;
+
+                try {
+                    let result;
+                    if (apiKey && apiKey !== "") {
+                        result = await callGemini(question, systemPrompt);
+                    } else {
+                        // 使用本地极其精细分类的眼部自疗方案
+                        const localContent = getSmartLocalResponse(question);
+                        result = `[由于您未配置云端API Key，AI守护者启动本地应急专家诊断系统]\n\n${localContent}`;
+                    }
+                    loadingBubble.querySelector('.ai-loading').innerHTML = result.replace(/\n/g, '<br>');
+                } catch (error) {
+                    const localContent = getSmartLocalResponse(question);
+                    loadingBubble.querySelector('.ai-loading').innerHTML = `⚠️ 远程脑波诊断暂时中断，AI开启本地应急诊断系统：<br><br>${localContent.replace(/\n/g, '<br>')}`;
+                } finally {
+                    qaChatBox.scrollTop = qaChatBox.scrollHeight;
+                }
+            }
+
+            qaSendBtn.addEventListener('click', handleSendMessage);
+            qaInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    handleSendMessage();
+                }
+            });
+        }
+
+        function isAIPanelOpen() {
+            return document.getElementById('ai-panel-overlay').style.display === 'flex';
+        }
+
+        function escapeHTML(str) {
+            return str.replace(/[&<>'"]/g, 
+                tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+            );
+        }
+
+        // --- 10. UI 面板跳转控制与选择分流逻辑 ---
+        const menuScreen = document.getElementById('menu-screen');
+        const dialogOverlay = document.getElementById('dialog-overlay');
+        const tipsBar = document.getElementById('tips-bar');
+        const minimapContainer = document.getElementById('minimap-container');
+        const winScreen = document.getElementById('win-screen');
+        const astigmatismIndicator = document.getElementById('astigmatism-indicator');
+        const aiToggleBtn = document.getElementById('ai-toggle-btn');
+
+        const startBtn = document.getElementById('start-btn');
+        const normalPathBtn = document.getElementById('normal-path-btn');
+        const astigPathBtn = document.getElementById('astig-path-btn');
+        const exitBtn = document.getElementById('exit-btn');
+        const restartBtn = document.getElementById('restart-btn');
+
+        startBtn.addEventListener('click', () => {
+            showPanel(GAME_STATE.DIALOG);
+        });
+
+        normalPathBtn.addEventListener('click', () => {
+            isOnAstigmatismPath = false;
+            enterMazeGame();
+        });
+
+        astigPathBtn.addEventListener('click', () => {
+            isAstigmatismActive = true;
+            isOnAstigmatismPath = true;
+            astigmatismLevel = Math.max(astigmatismLevel, 15);
+            updateAstigmatismUI();
+            enterMazeGame();
+        });
+
+        exitBtn.addEventListener('click', () => {
+            exitToMenu();
+        });
+
+        restartBtn.addEventListener('click', () => {
+            // 重置追踪变量与散光
+            astigmatismLevel = 0;
+            isAstigmatismActive = false;
+            peakAstigmatismLevel = 0;
+            isOnAstigmatismPath = false;
+            playTimeSeconds = 0;
+            collisionCount = 0;
+            updateAstigmatismUI();
+            updateStatsUI();
+
+            resetPlayerToStart();
+            showPanel(GAME_STATE.DIALOG);
+        });
+
+        function showPanel(state) {
+            currentStatus = state;
+            
+            menuScreen.style.display = 'none';
+            dialogOverlay.style.display = 'none';
+            winScreen.style.display = 'none';
+            tipsBar.style.display = 'none';
+            minimapContainer.style.display = 'none';
+            astigmatismIndicator.style.display = 'none';
+            aiToggleBtn.style.display = 'none';
+
+            if (state === GAME_STATE.MENU) {
+                menuScreen.style.display = 'flex';
+                if (typeof document.exitPointerLock === 'function') {
+                    document.exitPointerLock();
+                }
+            } else if (state === GAME_STATE.DIALOG) {
+                dialogOverlay.style.display = 'flex';
+            } else if (state === GAME_STATE.PLAYING) {
+                tipsBar.style.display = 'block';
+                minimapContainer.style.display = 'block';
+                astigmatismIndicator.style.display = 'block';
+                aiToggleBtn.style.display = 'block';
+            } else if (state === GAME_STATE.WIN) {
+                winScreen.style.display = 'flex';
+                if (typeof document.exitPointerLock === 'function') {
+                    document.exitPointerLock();
+                }
+            }
+        }
+
+        function enterMazeGame() {
+            resetPlayerToStart();
+            showPanel(GAME_STATE.PLAYING);
+        }
+
+        function resetPlayerToStart() {
+            for (let r = 0; r < MAZE_GRID.length; r++) {
+                for (let c = 0; c < MAZE_GRID[r].length; c++) {
+                    if (MAZE_GRID[r][c] === 2) {
+                        player.x = c * UNIT_SIZE + UNIT_SIZE / 2;
+                        player.z = r * UNIT_SIZE + UNIT_SIZE / 2;
+                        player.angleY = 0;
+                        player.angleX = 0;
+                        break;
+                    }
+                }
+            }
+            updateCameraTransform();
+        }
+
+        function exitToMenu() {
+            showPanel(GAME_STATE.MENU);
+        }
+
+        function triggerWin() {
+            showPanel(GAME_STATE.WIN);
+        }
+
+        // --- 11. 初始化启动入口 ---
+        window.onload = function() {
+            initThree();
+            setupControls();
+            initAIGuardian(); // 启动AI守护专家模块
+            requestAnimationFrame(animate);
+            showPanel(GAME_STATE.MENU);
+        };
+    </script>
+</body>
+</html>
